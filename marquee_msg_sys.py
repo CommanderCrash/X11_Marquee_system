@@ -37,6 +37,7 @@ tcp_port = 5555        # For receiving messages
 
 # Font configurations
 FONT_PATHS = [
+    "/usr/share/fonts/truetype/font-awesome/GreatAttraction-L1JW.ttf"
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/TTF/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
@@ -53,8 +54,8 @@ EMOJI_FONT_PATHS = [
 
 def get_emoji_font(size):
     """Get font for emojis"""
-    # Force a very small fixed size for emojis
-    emoji_size = 30  # Try a fixed small size regardless of input size
+    # Force a very small fixed size for emojis, emojis take up 100px of the banner.
+    emoji_size = 10  # Try a fixed small size regardless of input size, This may not work!
     
     emoji_paths = [
         "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
@@ -194,7 +195,7 @@ class Message:
 
     def convert_emoji_to_emoticon(self, text):
         """Convert Unicode emoji to text emoticons"""
-        emoji_to_emoticon = {
+         emoji_to_emoticon = {
             '😊': ':)',
             '😃': ':D',
             '😄': ':D',
@@ -281,8 +282,7 @@ def create_window():
             screen_width, _ = get_screen_size()
             os.putenv('SDL_VIDEO_WINDOW_POS', '0,0')
             os.environ['SDL_VIDEO_WINDOW_POS'] = '0,0'
-            screen = pygame.display.set_mode((screen_width, 100), pygame.NOFRAME | pygame.SHOWN | pygame.SRCALPHA)
-            pygame.display.set_caption('Transparent Message')
+            screen = pygame.display.set_mode((screen_width, 100), pygame.NOFRAME | pygame.SHOWN)
             window_visible = True
             time.sleep(0.1)
             return True
@@ -364,55 +364,29 @@ def render_text_with_blink(text: str, font_size: int, color: str, blink_mode: in
     
     return final_surface
 
-def create_glass_panel(width, height):
-    """Creates a glass panel effect surface with light reflection and borders"""
-    surface = pygame.Surface((width, height), pygame.SRCALPHA)
-    
-    # Main glass panel - semi-transparent white
-    glass_color = (255, 255, 255, 25)  # Very light, mostly transparent white
-    surface.fill(glass_color)
-    
-    # Add subtle gradient overlay for depth
-    gradient = pygame.Surface((width, height), pygame.SRCALPHA)
-    for i in range(height):
-        alpha = int(25 * (1 - i/height))  # Fade from top to bottom
-        pygame.draw.line(gradient, (255, 255, 255, alpha), (0, i), (width, i))
-    surface.blit(gradient, (0, 0))
-    
-    # Add light border
-    border_color = (255, 255, 255, 40)
-    pygame.draw.rect(surface, border_color, (0, 0, width, height), 1)
-    
-    # Add highlight at the top
-    highlight_color = (255, 255, 255, 30)
-    pygame.draw.line(surface, highlight_color, (0, 1), (width, 1), 2)
-    
-    return surface
-
 def update_marquee():
     global current_message, message_visible, screen, blink_state
     if current_message is not None and screen is not None:
         try:
-            font_size = 100
-            font = get_font_with_emoji_support(font_size)
+            font_size = 100  # Define font size here. It will not effect emoji size.
+            font = get_font_with_emoji_support(font_size)  # Get font for initial measurement only
             has_emoji = current_message.has_emoji()
             
+            # Get initial text dimensions
             temp_text = font.render(current_message.text, True, pygame.Color(current_message.color))
             text_rect = temp_text.get_rect()
             screen_height = text_rect.height + 5
             
-            # Set up window with alpha channel support
-            pygame.display.set_mode((screen.get_width(), screen_height), pygame.NOFRAME | pygame.SHOWN | pygame.SRCALPHA)
+            # Set up the window size
+            pygame.display.set_mode((screen.get_width(), screen_height), pygame.NOFRAME | pygame.SHOWN)
             
-            # Handle glass panel effect
-            if current_message.bg_color.lower() == 'glass':
-                glass_panel = create_glass_panel(screen.get_width(), screen_height)
-            else:
-                try:
-                    bg_color = pygame.Color(current_message.bg_color)
-                except (ValueError, TypeError):
-                    bg_color = pygame.Color(0, 0, 0)
+            # Parse background color
+            try:
+                bg_color = pygame.Color(current_message.bg_color)
+            except (ValueError, TypeError):
+                bg_color = pygame.Color(0, 0, 0)
             
+            # For scrolling
             x = screen.get_width()
             
             # Pre-render the text to get its full width
@@ -425,17 +399,21 @@ def update_marquee():
             )
             text_width = full_text.get_width()
             
+            # Slow down the blinking
             blink_counter = 0
             
-            while x > -(text_width):
+            # Continue until the entire text has scrolled off the left side of the screen
+            while x > -(text_width):  # Changed condition to use actual text width
                 if not window_visible:
                     break
                 
+                # Update blink state every 30 frames (slower blink)
                 blink_counter += 1
                 if blink_counter >= 30:
                     blink_state = not blink_state
                     blink_counter = 0
                 
+                # Render text with current blink state, passing font_size instead of font object
                 rendered_text = render_text_with_blink(
                     current_message.text,
                     font_size,
@@ -444,28 +422,7 @@ def update_marquee():
                     has_emoji
                 )
                 
-                # Clear screen with transparency
-                screen.fill((0, 0, 0, 0))
-                
-                if current_message.bg_color.lower() == 'glass':
-                    # Apply glass panel effect
-                    screen.blit(glass_panel, (0, 0))
-                    
-                    # Add subtle shadow under text for better readability
-                    shadow_offset = 2
-                    shadow_text = render_text_with_blink(
-                        current_message.text,
-                        font_size,
-                        "black",  # Shadow color
-                        current_message.blink_mode,
-                        has_emoji
-                    )
-                    # Set shadow transparency
-                    shadow_text.set_alpha(50)
-                    screen.blit(shadow_text, (x + shadow_offset, 10 + shadow_offset))
-                else:
-                    screen.fill(bg_color)
-                
+                screen.fill(bg_color)
                 screen.blit(rendered_text, (x, 10))
                 pygame.display.flip()
                 
