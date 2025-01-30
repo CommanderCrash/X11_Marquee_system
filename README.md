@@ -45,8 +45,8 @@ Required packages:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/notification-display-server.git
-cd notification-display-server
+git clone https://github.com/CommanderCrash/X11_Marquee_system.git
+cd X11_Marquee_system
 ```
 
 2. Install dependencies:
