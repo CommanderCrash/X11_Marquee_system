@@ -1,0 +1,147 @@
+/* static/css/style.css */
+:root {
+    --glass-color: rgba(255, 255, 255, 0.1);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-shadow: rgba(0, 0, 0, 0.3);
+    --glow-color: rgba(255, 215, 0, 0.3);
+}
+
+body {
+    background: linear-gradient(45deg, #1a1a1a, #2d2d2d);
+    color: #fff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+.glass-panel {
+    background: var(--glass-color);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    box-shadow: 0 4px 6px var(--glass-shadow);
+    padding: 20px;
+    margin: 10px;
+}
+
+.marquee-container {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin-bottom: 20px;
+}
+
+.marquee-window {
+    height: 100px;
+    overflow: hidden;
+    position: relative;
+}
+
+.marquee-text {
+    position: absolute;
+    white-space: nowrap;
+    font-size: 48px;
+    line-height: 100px;
+    animation: marquee-scroll 20s linear infinite;
+}
+
+.marquee {
+    white-space: nowrap;
+    animation: marquee 20s linear infinite;
+    color: #FFD700;
+    text-shadow: 0 0 10px var(--glow-color);
+    font-size: 24px;
+}
+
+.main-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.panel {
+    min-height: 200px;
+}
+
+.glass-button {
+    background: var(--glass-color);
+    border: 1px solid var(--glass-border);
+    border-radius: 5px;
+    color: #fff;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.glass-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 15px var(--glow-color);
+}
+
+.context-menu {
+    position: fixed;
+    display: none;
+    z-index: 1000;
+}
+
+.menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.menu-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    z-index: 1100;
+}
+
+.scrollable {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+@keyframes marquee {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+}
+
+@keyframes marquee-scroll {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+}
+
+/* Dynamic styles will be added via JavaScript */
+.marquee-text.blink {
+    animation: marquee-scroll 20s linear infinite, blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+.log-entry {
+    padding: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.log-entry .timestamp {
+    color: #888;
+    font-size: 0.9em;
+}
+
+.log-entry .message-text {
+    flex-grow: 1;
+}
