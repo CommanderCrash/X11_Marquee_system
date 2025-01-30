@@ -12,7 +12,8 @@ const themes = {
         '--input-bg': 'rgba(0, 0, 0, 0.3)',
         '--button-bg': 'rgba(0, 255, 0, 0.2)',
         '--button-hover': 'rgba(0, 255, 0, 0.4)',
-        '--log-bg': 'rgba(0, 0, 0, 0.2)'
+        '--log-bg': 'rgba(0, 0, 0, 0.2)',
+        '--timestamp-color': '#00b7eb'  // Keep original gray for matrix theme
     },
 
 office: {
@@ -26,13 +27,14 @@ office: {
     '--input-bg': '#ffffffd1',             // --input-bg: #ffffffd1
     '--button-bg': '#cce9ff',            // Light blue buttons
     '--button-hover': '#106ebe',         // Darker blue on hover
-    '--log-bg': '#000000c2',             // Semi-transparent black
+    '--log-bg': '#07232bb8',             // Semi-transparent black
     '--error-color': '#d83b01',          // Red for errors
     '--success-color': '#107c10',        // Green for success
     '--warning-color': '#797673',        // Gray for warnings
     '--disabled-bg': '#f3f2f1',          // Light gray for disabled
     '--hover-bg': '#f3f9fd',             // Very light blue for hover
-    '--selected-bg': '#e5f3ff'           // Light blue for selected
+    '--selected-bg': '#e5f3ff',          // Light blue for selected
+    '--timestamp-color': '#00b7eb'       // Change to any color you want for office theme
 }
 };
 
