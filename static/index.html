@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marquee Display Server</title>
+    <style>
+        /* Base styles */
+        body {
+            margin: 0;
+            padding: 0;
+            background: black;
+            font-family: 'Arial', sans-serif;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Glass container styles */
+        .glass-container {
+            backdrop-filter: blur(10px) saturate(180%);
+            background-color: rgba(17, 25, 40, 0.75);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.125);
+            padding: 20px;
+            margin: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3), 0 0 40px rgba(0, 255, 0, 0.3);
+        }
+
+        .container-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        /* Form styles */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #d5ff76;
+            text-shadow: 0 0 5px #d5ff76;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+        }
+
+        button {
+            padding: 10px 20px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 255, 0, 0.2);
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: rgba(0, 255, 0, 0.4);
+            text-shadow: 0 0 5px #fff;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        /* Message log styles */
+        .message-log {
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+
+    .log-entry {
+        padding: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        font-family: monospace;
+    }
+    
+    .log-entry .timestamp {
+        color: #888;
+        margin-right: 10px;
+    }
+    
+    .log-entry .priority {
+        color: #ff9800;
+        margin-left: 10px;
+    }
+    
+        /* Context menu */
+        .context-menu {
+            position: fixed;
+            background: rgba(17, 25, 40, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.125);
+            border-radius: 4px;
+            padding: 5px 0;
+            display: none;
+        }
+
+        .context-menu-item {
+            padding: 8px 20px;
+            cursor: pointer;
+        }
+
+        .context-menu-item:hover {
+            background: rgba(0, 255, 0, 0.2);
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: rgba(17, 25, 40, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.125);
+            width: 300px;
+        }
+
+        /* Matrix background */
+        #matrix-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+
+    </style>
+</head>
+<body>
+    <canvas id="matrix-canvas"></canvas>
+    
+    <div class="container-grid">
+        <!-- Message Sender -->
+        <div class="glass-container">
+            <h2>Send Message</h2>
+            <form id="message-form">
+                <div class="form-group">
+                    <label for="message-text">Message</label>
+                    <input type="text" id="message-text" required>
+                </div>
+                <div class="form-group">
+                    <label for="message-priority">Priority</label>
+                    <input type="number" id="message-priority" value="1" min="1" max="10">
+                </div>
+                <div class="form-group">
+                    <label for="message-color">Text Color</label>
+                    <input type="color" id="message-color" value="#ffffff">
+                </div>
+                <div class="form-group">
+                    <label for="message-bg-color">Background Color</label>
+                    <input type="color" id="message-bg-color" value="#000000">
+                </div>
+                <div class="form-group">
+                    <label for="blink-mode">Blink Mode</label>
+                    <select id="blink-mode">
+                        <option value="0">No Blink</option>
+                        <option value="1">Text Only</option>
+                        <option value="2">Emoji Only</option>
+                        <option value="3">Full Blink</option>
+                    </select>
+                </div>
+<div class="form-group">
+    <label for="scroll-speed">Scroll Speed</label>
+    <input type="range" 
+           id="scroll-speed" 
+           min="0.001" 
+           max="0.1" 
+           step="0.001" 
+           value="0.05">
+    <span id="speed-value">0.05</span>
+</div>
+                <button type="submit">Send Message</button>
+            </form>
+        </div>
+
+        <!-- Message Log -->
+        <div class="glass-container">
+            <h2>Message Log</h2>
+            <div class="message-log" id="message-log"></div>
+            <button id="clear-log">Clear Log</button>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="context-menu">
+        <div class="context-menu-item" id="ignore-message">Ignore Message</div>
+    </div>
+
+    <!-- Ignore Modal -->
+    <div class="modal" id="ignore-modal">
+        <div class="modal-content">
+            <h3>Ignore Message</h3>
+            <div class="form-group">
+                <label for="ignore-duration">Duration (minutes)</label>
+                <input type="number" id="ignore-duration" min="1" value="5">
+            </div>
+            <button id="confirm-ignore">Confirm</button>
+            <button id="cancel-ignore">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="hoverSound" preload="auto">
+        <source src="/sounds/menu-hover.wav" type="audio/wav">
+    </audio>
+    <audio id="clickSound" preload="auto">
+        <source src="/sounds/Menu-sel1.wav" type="audio/wav">
+    </audio>
+    <audio id="dropdownSound" preload="auto">
+        <source src="/sounds/Menu-back.wav" type="audio/wav">
+    </audio>
+
+    <script>
+        // Matrix background effect
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Matrix rain effect
+        const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*";
+        const fontSize = 14;
+        const columns = canvas.width / fontSize;
+        const drops = new Array(Math.floor(columns)).fill(1);
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0F0';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = characters[Math.floor(Math.random() * characters.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        setInterval(drawMatrix, 50);
+
+        // Sound effects
+        function playSound(soundId) {
+            const sound = document.getElementById(soundId);
+            sound.currentTime = 0;
+            sound.play();
+        }
+
+        // Add hover sound to buttons
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('mouseenter', () => playSound('hoverSound'));
+            button.addEventListener('click', () => playSound('clickSound'));
+        });
+
+        // Message handling
+        const messageForm = document.getElementById('message-form');
+        const messageLog = document.getElementById('message-log');
+        const clearLogBtn = document.getElementById('clear-log');
+
+        messageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = {
+                text: document.getElementById('message-text').value,
+                priority: document.getElementById('message-priority').value,
+                color: document.getElementById('message-color').value,
+                bgColor: document.getElementById('message-bg-color').value,
+                blinkMode: document.getElementById('blink-mode').value,
+                speed: document.getElementById('scroll-speed').value
+            };
+
+            try {
+                const response = await fetch('/api/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    addToLog(formData);
+                    messageForm.reset();
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+            }
+        });
+
+        function addToLog(message) {
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message.text}`;
+            messageLog.insertBefore(logEntry, messageLog.firstChild);
+        }
+
+        clearLogBtn.addEventListener('click', () => {
+            messageLog.innerHTML = '';
+            playSound('clickSound');
+        });
+
+        // Context menu
+        const contextMenu = document.getElementById('context-menu');
+        const ignoreModal = document.getElementById('ignore-modal');
+
+        messageLog.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = e.pageX + 'px';
+            contextMenu.style.top = e.pageY + 'px';
+            playSound('dropdownSound');
+        });
+
+        document.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+        });
+
+        document.getElementById('ignore-message').addEventListener('click', () => {
+            ignoreModal.style.display = 'flex';
+            playSound('clickSound');
+        });
+
+        document.getElementById('cancel-ignore').addEventListener('click', () => {
+            ignoreModal.style.display = 'none';
+            playSound('clickSound');
+        });
+
+        document.getElementById('confirm-ignore').addEventListener('click', () => {
+            const duration = document.getElementById('ignore-duration').value;
+            // Handle ignore logic here
+            ignoreModal.style.display = 'none';
+            playSound('clickSound');
+        });
+    </script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
