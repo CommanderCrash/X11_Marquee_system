@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# By Commander Crash
+
 import os
 import socket
 import select
@@ -11,15 +13,34 @@ import time
 import stat
 import uuid
 import argparse
+import re
+import json
+import os.path
+from flask import Flask, request, send_from_directory, jsonify
+import threading
+from functools import partial
+import os
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from functools import partial
 from dataclasses import dataclass
 from typing import Optional, Tuple
-import re
-import os.path
+from datetime import datetime
+
+# Create Flask app
+app = Flask(__name__, static_folder='static')
+
+# Global message log
+message_history = []
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Notification Display Server')
     parser.add_argument('-t', '--tcp', action='store_true',
                       help='Enable TCP socket on port 5555 for network messages')
+    parser.add_argument('-w', '--webui', action='store_true',
+                      help='Enable Web UI')
+    parser.add_argument('-wp', '--webui-port', type=int, default=5501,
+                      help='Web UI port (default: 5501)')
     return parser.parse_args()
 
 # Set display environment variables for pygame
@@ -54,8 +75,8 @@ EMOJI_FONT_PATHS = [
 
 def get_emoji_font(size):
     """Get font for emojis"""
-    # Force a very small fixed size for emojis, emojis take up 100px of the banner.
-    emoji_size = 10  # Try a fixed small size regardless of input size, This may not work!
+    # Force a very small fixed size for emojis
+    emoji_size = 10  # Try a fixed small size regardless of input size
     
     emoji_paths = [
         "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
@@ -168,6 +189,18 @@ def render_mixed_text(text, size, color, bg_color=None):
     
     return surface
 
+def add_to_message_history(text, priority=1, color="#ffffff", bg_color="#000000"):
+    """Centralized function to add messages to history"""
+    message_entry = {
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'message': text,
+        'priority': priority,
+        'color': color,
+        'bg_color': bg_color
+    }
+    message_history.append(message_entry)
+    return message_entry
+
 @dataclass
 class Message:
     text: str
@@ -183,7 +216,6 @@ class Message:
     def __post_init__(self):
         if not self.id:
             self.id = str(uuid.uuid4())
-        self.text = self.convert_emoji_to_emoticon(self.text)
 
     def __lt__(self, other):
         return self.priority < other.priority
@@ -192,48 +224,6 @@ class Message:
         """Check for both Unicode emojis and text emoticons"""
         emoticon_pattern = r'(:-?\)|:-?\(|:-?D|:-?P|;-?\)|:-?\||>:-?\(|\^_\^|:3|<3|:o|:O|:v|:V|=\))'
         return bool(re.search(emoticon_pattern, self.text))
-
-    def convert_emoji_to_emoticon(self, text):
-        """Convert Unicode emoji to text emoticons"""
-         emoji_to_emoticon = {
-            '😊': ':)',
-            '😃': ':D',
-            '😄': ':D',
-            '😆': 'XD',
-            '🙂': ':)',
-            '😉': ';)',
-            '😢': ':(',
-            '😭': ':\'(',
-            '😎': '8)',
-            '😍': '<3',
-            '👍': '(y)',
-            '❤️': '<3',
-            '💙': '<3',
-            '💚': '<3',
-            '💛': '<3',
-            '💜': '<3',
-            '😀': ':D',
-            '😁': ':D',
-            '☹️': ':(',
-            '🙁': ':(',
-            '😮': ':O',
-            '😯': ':o',
-            '😕': ':/',
-            '❓': '?',
-            '❗': '!',
-            '💪': 'flex',
-            '👋': 'wave',
-            '🎵': '♪',
-            '🎶': '♫',
-            '⭐': '*',
-            '✨': '*',
-            '🔥': 'fire',
-            '💯': '100',
-        }
-        
-        for emoji, emoticon in emoji_to_emoticon.items():
-            text = text.replace(emoji, emoticon)
-        return text
 
 class MessageQueue:
     def __init__(self):
@@ -260,6 +250,44 @@ class MessageQueue:
             pass
         return None
 
+class NotificationHandler(SimpleHTTPRequestHandler):
+    def __init__(self, message_queue, *args, **kwargs):
+        self.message_queue = message_queue
+        super().__init__(*args, **kwargs)
+    
+    def translate_path(self, path):
+        # Serve files from the static directory
+        if path == '/':
+            return os.path.join(os.path.dirname(__file__), 'static', 'index.html')
+        return os.path.join(os.path.dirname(__file__), 'static', path.lstrip('/'))
+    
+    def do_POST(self):
+        if self.path == '/api/send-message':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            # Convert hex colors to names or keep as hex
+            color = data.get('color', '#ffffff')
+            bg_color = data.get('bgColor', '#000000')
+            
+            # Create message string in the expected format
+            message_str = (f"{data.get('priority', 1)}|"
+                         f"{data.get('blinkMode', 0)}|"
+                         f"{data.get('text', '')}|"
+                         f"{color}|{bg_color}|"
+                         f"{data.get('speed', 1.0)}||")
+            
+            parse_and_queue_message(message_str)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'success'}).encode())
+            return
+            
+        return super().do_POST()
+
 # Global variables
 message_queue = MessageQueue()
 current_message = None
@@ -267,6 +295,12 @@ message_visible = False
 window_visible = False
 screen = None
 blink_state = True
+
+def start_webserver(port, message_queue):
+    handler = partial(NotificationHandler, message_queue)
+    server = HTTPServer(('', port), handler)
+    print(f"Web UI started on port {port}")
+    server.serve_forever()
 
 def get_screen_size():
     pygame.display.init()
@@ -368,7 +402,7 @@ def update_marquee():
     global current_message, message_visible, screen, blink_state
     if current_message is not None and screen is not None:
         try:
-            font_size = 100  # Define font size here. It will not effect emoji size.
+            font_size = 70  # Define font size here if it works
             font = get_font_with_emoji_support(font_size)  # Get font for initial measurement only
             has_emoji = current_message.has_emoji()
             
@@ -450,6 +484,17 @@ def parse_and_queue_message(data):
         # Fix empty background color
         if not bg_color.strip():
             bg_color = "black"
+            
+        # Add to message history BEFORE creating Message object
+        history_entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'message': text.strip(),
+            'priority': int(priority),
+            'color': color,
+            'bg_color': bg_color
+        }
+        print(f"Adding to history: {history_entry}")  # Debug print
+        message_history.append(history_entry)
         
         msg = Message(
             text=text,
@@ -468,6 +513,7 @@ def parse_and_queue_message(data):
         
     except Exception as e:
         print(f"Failed to parse message: {e}")
+        traceback.print_exc()  # Add this for better error tracking
 
 def socket_listener():
     try:
@@ -487,6 +533,7 @@ def socket_listener():
                 print(f"Raw data received: {data}")
                 
                 if data:
+                    # This will now log the message through parse_and_queue_message
                     parse_and_queue_message(data)
                 connection.close()
             except Exception as e:
@@ -514,12 +561,63 @@ def check_queue():
         if msg.wav_path:
             play_audio(msg.wav_path)
 
+@app.route('/')
+def index():
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/sounds/<path:filename>')
+def serve_sound(filename):
+    return send_from_directory(os.path.join(app.static_folder, 'sounds'), filename)
+
+@app.route('/api/send-message', methods=['POST'])
+def send_message():
+    try:
+        data = request.get_json()
+        
+        # Convert hex colors to names or keep as hex
+        color = data.get('color', '#ffffff')
+        bg_color = data.get('bgColor', '#000000')
+        
+        # Create message string in the expected format
+        message_str = (f"{data.get('priority', 1)}|"
+                     f"{data.get('blinkMode', 0)}|"
+                     f"{data.get('text', '')}|"
+                     f"{color}|{bg_color}|"
+                     f"{data.get('speed', 1.0)}||")
+        
+        parse_and_queue_message(message_str)
+        
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        print(f"Error in send_message: {e}")  # Add error logging
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/message-history', methods=['GET'])
+def get_message_history():
+    print(f"Returning message history with {len(message_history)} entries")  # Debug print
+    return jsonify(list(reversed(message_history)))  # Most recent first
+
+@app.route('/api/clear-history', methods=['POST'])
+def clear_history():
+    message_history.clear()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/current_message', methods=['GET'])
+def get_current_message():
+    # Return empty response since we're not using this endpoint
+    return jsonify({'message': None})
+
+def start_webserver(port):
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+
 if __name__ == "__main__":
     args = parse_arguments()
     
     print("\nServer Configuration:")
     print(f"Unix Socket: Enabled at {sock_path}")
     print(f"TCP Socket: {'Enabled' if args.tcp else 'Disabled'} (Port {tcp_port})")
+    print(f"Web UI: {'Enabled' if args.webui else 'Disabled'} (Port {args.webui_port})")
 
     try:
         os.unlink(sock_path)
@@ -544,9 +642,16 @@ if __name__ == "__main__":
     if args.tcp:
         print(f"Listening for network messages on port {tcp_port}")
 
+    # Start the socket listener thread
     listener_thread = threading.Thread(target=start_socket_listener)
     listener_thread.daemon = True
     listener_thread.start()
+
+    # Start web UI if enabled
+    if args.webui:
+        webui_thread = threading.Thread(target=start_webserver, args=(args.webui_port,))
+        webui_thread.daemon = True
+        webui_thread.start()
 
     try:
         while True:
@@ -568,5 +673,3 @@ if __name__ == "__main__":
         destroy_window()
         pygame.quit()
         sys.exit()
-
-pygame.quit()
