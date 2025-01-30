@@ -1,93 +1,162 @@
-<h1 align="center">Marquee Message System</h1>
-<hr />
-<p>
-  The <strong>Marquee Message System</strong> is a Python application designed to display scrolling text messages on multiple screens using the Pygame library. This can be useful for alert systems, announcements, or any application requiring visual notifications.
-</p>
-<hr />
-<h2>Features</h2>
-<ul>
-  <li>Support for multiple displays.</li>
-  <li>Customizable message attributes (color, speed, priority).</li>
-  <li>Audio playback for accompanying alerts.</li>
-  <li>Socket communication for receiving messages.</li>
-  <li>Devimon Variant connects to android app to display notifications.</li>
-  <li>Full emoji support with auto-conversion to text emoticons.</li>
-  <li>Glass panel effect background option.</li>
-  <li>Customizable blinking modes for text and emojis.</li>
-  <li>TCP socket support for network messages.</li>
-</ul>
-<hr />
-<h2>Requirements</h2>
-<ul>
-  <li>Python 3.x</li>
-  <li>Pygame (version 2.0 or later)</li>
-  <li>libSDL2, libSDL2_mixer, libSDL2_ttf</li>
-  <li>Access to X11 display server</li>
-  <li>Noto Color Emoji font (for emoji support)</li>
-</ul>
-<hr />
-<h2>Installation</h2>
-<pre><code>
-# Install required libraries
-sudo apt-get install libsdl2-dev libsdl2-mixer-dev libsdl2-ttf-dev fonts-noto-color-emoji
-pip install pygame
-</code></pre>
-<hr />
-<h2>Usage</h2>
-<p>
-  To run the Marquee Message System, use the following commands:
-</p>
-<pre><code>
-# Run with local Unix socket only
-python3 marquee_msg_sys.py
+# Notification Display Server
 
-# Run with TCP socket enabled
-python3 marquee_msg_sys.py -t
-</code></pre>
-<hr />
-<h2>Sending Messages</h2>
-<p>
-  Messages can be sent to the system via a Unix socket or TCP connection. The message format is as follows:
-</p>
-<pre><code>
-priority|blink_mode|text|color|bg_color|speed|audio_path|use_espeak
-</code></pre>
-<p>
-  Parameters:
-</p>
-<ul>
-  <li>priority: Message priority (lower numbers = higher priority)</li>
-  <li>blink_mode: 0 = no blink, 1 = text blinks, 2 = emoji blinks, 3 = all blinks</li>
-  <li>text: Message text (supports emojis)</li>
-  <li>color: Text color (e.g., 'red', '#FF0000')</li>
-  <li>bg_color: Background color or 'glass' for glass panel effect</li>
-  <li>speed: Scroll speed (lower = faster)</li>
-  <li>audio_path: Path to WAV file (optional)</li>
-  <li>use_espeak: 0 or 1 for text-to-speech</li>
-</ul>
-<p>
-  Examples:
-</p>
-<pre><code>
-# Basic message with red text on black background
-echo "1|0|Hello World|red|black|0.01||0" | nc -U /mnt/ram/message_socket
+A versatile notification display system that shows scrolling messages on screen with support for custom colors, blinking effects, and web interface control.
 
-# Message with emojis and glass panel effect
-echo "1|0|⛈📲☎📞📟📠🔋🔌|red|glass|0.01||0" | nc -U /mnt/ram/message_socket
+## Features
 
-# Message with blinking text
-echo "1|1|ALERT MESSAGE|yellow|black|0.01||0" | nc -U /mnt/ram/message_socket
+- Scrolling text notifications with customizable colors and effects
+- Multiple input methods:
+  - Unix socket
+  - TCP socket (optional)
+  - Web interface (optional)
+- Message priority system
+- Message history tracking
+- Configurable display options:
+  - Text color
+  - Background color
+  - Scroll speed
+  - Blinking effects
+- Support for emoji and special characters
+- Audio notification support (WAV files)
 
-# Send message via TCP (if enabled)
-echo "1|0|Network Message|blue|glass|0.01||0" | nc localhost 5555
-</code></pre>
-<hr />
-<h2>Troubleshooting</h2>
-<ul>
-  <li>If you encounter issues with missing libraries, ensure that you have installed all the required SDL libraries.</li>
-  <li>For emoji support, verify that the Noto Color Emoji font is installed.</li>
-  <li>Check your display settings to ensure that your environment is set up to access the X11 display server.</li>
-  <li>If messages aren't displayed, check that the Unix socket exists at /mnt/ram/message_socket.</li>
-  <li>For TCP connections, ensure port 5555 is not blocked by firewall.</li>
-</ul>
-<hr />
+## Requirements
+
+### System Requirements
+- Python 3.8 or higher
+- X11 display server
+- System fonts (at least one of):
+  - DejaVu Sans
+  - Liberation Sans
+  - Free Sans
+  - Font Awesome (optional, for special characters)
+
+### Python Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+Required packages:
+- Flask
+- pygame
+- typing
+- dataclasses (for Python < 3.7)
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/notification-display-server.git
+cd notification-display-server
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Ensure you have X11 display server running:
+```bash
+echo $DISPLAY  # Should return something like :0
+```
+
+4. Make ram disk:
+```bash
+sudo mkdir -p /mnt/ram
+echo "ramfs       /mnt/ram ramfs   nodev,nosuid,nodiratime,size=100M,mode=1777   0 0" | sudo tee -a /etc/fstab 
+sudo mount -a
+```
+## Usage
+
+### Starting the Server
+
+Basic usage:
+```bash
+python3 notification_server.py
+```
+
+With all features enabled:
+```bash
+python3 notification_server.py --tcp --webui
+```
+
+Available command line options:
+- `-t, --tcp`: Enable TCP socket on port 5555
+- `-w, --webui`: Enable Web UI
+- `-wp, --webui-port PORT`: Set Web UI port (default: 5501)
+
+### Sending Messages
+
+1. Via Unix Socket:
+```bash
+echo "1|0|Hello World!|#ffffff|#000000|1.0||" > /mnt/ram/message_socket
+```
+
+2. Via TCP (if enabled):
+```bash
+echo "1|0|Hello World!|#ffffff|#000000|1.0||" | nc localhost 5555
+```
+
+3. Via Web Interface (if enabled):
+- Open http://localhost:5501 in your browser
+- Use the web form to send messages
+
+### Message Format
+
+Messages should be formatted as:
+```
+priority|blink_mode|text|color|bg_color|speed|wav_path|use_espeak
+```
+
+Parameters:
+- `priority`: Integer (1-9, lower = higher priority)
+- `blink_mode`: Integer (0=none, 1=text only, 2=emoji only, 3=all)
+- `text`: Message text
+- `color`: Text color (hex code or color name)
+- `bg_color`: Background color (hex code or color name)
+- `speed`: Scroll speed (float, larger = slower)
+- `wav_path`: Path to WAV file (optional)
+- `use_espeak`: Espeak parameters (optional)
+
+Example:
+```
+1|0|Important Message|#ff0000|#000000|1.0||
+```
+
+## Web Interface
+
+If enabled, the web interface provides:
+- Message submission form
+- Message history
+- Real-time message preview
+- Color picker for text and background
+- Speed adjustment slider
+- Blink mode selection
+
+Access at: http://localhost:5501 (or configured port)
+
+## Troubleshooting
+
+1. Display Issues:
+- Ensure X11 is running: `echo $DISPLAY`
+- Check font availability: `fc-list`
+- Verify pygame installation: `python3 -c "import pygame"`
+
+2. Socket Issues:
+- Check socket permissions: `ls -l /mnt/ram/message_socket`
+- Verify port availability: `netstat -an | grep 5555`
+
+3. Web Interface Issues:
+- Confirm Flask installation: `python3 -c "import flask"`
+- Check port availability: `netstat -an | grep 5501`
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request
