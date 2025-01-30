@@ -36,7 +36,73 @@ office: {
 }
 };
 
+
+// Matrix animation setup and control
+function setupMatrixAnimation() {
+    const canvas = document.getElementById('matrix-canvas');
+    const ctx = canvas.getContext('2d');
+    let animationId = null;
+
+    // Set canvas size
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*";
+    const fontSize = 14;
+    let drops = [];
+
+    function initMatrix() {
+        resizeCanvas();
+        const columns = canvas.width / fontSize;
+        drops = new Array(Math.floor(columns)).fill(1);
+    }
+
+    function drawMatrix() {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#0F0';
+        ctx.font = fontSize + 'px monospace';
+
+        for (let i = 0; i < drops.length; i++) {
+            const text = characters[Math.floor(Math.random() * characters.length)];
+            ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                drops[i] = 0;
+            }
+            drops[i]++;
+        }
+        animationId = requestAnimationFrame(drawMatrix);
+    }
+
+    // Initialize
+    initMatrix();
+    window.addEventListener('resize', () => {
+        initMatrix();
+    });
+
+    // Return control functions
+    return {
+        start: () => {
+            if (!animationId) {
+                drawMatrix();
+            }
+        },
+        stop: () => {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+    };
+}
+
 // Theme handling function
+const matrixController = setupMatrixAnimation();
+
 function applyTheme(themeName) {
     const theme = themes[themeName];
     for (const [property, value] of Object.entries(theme)) {
@@ -44,18 +110,24 @@ function applyTheme(themeName) {
     }
 
     // Add theme-specific class to body
-    document.body.dataset.theme = themeName;  // Add this line
+    document.body.dataset.theme = themeName;
 
-    // Toggle matrix canvas visibility
+    // Toggle matrix canvas and animation
     const matrixCanvas = document.getElementById('matrix-canvas');
     if (matrixCanvas) {
-        matrixCanvas.style.display = themeName === 'matrix' ? 'block' : 'none';
+        if (themeName === 'matrix') {
+            matrixCanvas.style.display = 'block';
+            matrixController.start();
+        } else {
+            matrixCanvas.style.display = 'none';
+            matrixController.stop();
+        }
     }
 
     // Update glass container styles
     document.querySelectorAll('.glass-container').forEach(container => {
         if (themeName === 'office') {
-            container.style.boxShadow = '0 0 20px rgba(255,0,255, 0.3), 0 0 40px rgba(255,0,255, 0.3)'; // Yellow glow
+            container.style.boxShadow = '0 0 20px rgba(255, 255, 0, 0.3), 0 0 40px rgba(255, 255, 0, 0.3)';
             container.style.backdropFilter = 'none';
         } else {
             container.style.boxShadow = '0 0 20px var(--shadow-color), 0 0 40px var(--shadow-color)';
