@@ -138,16 +138,48 @@ def get_font_with_emoji_support(size):
 
 
 def is_emoji(char):
-    """Check if a character is an emoji"""
+    """Check if a character is an emoji, including those with variation selectors"""
     emoji_pattern = re.compile("["
         u"\U0001F600-\U0001F64F"  # emoticons
         u"\U0001F300-\U0001F5FF"  # symbols & pictographs
         u"\U0001F680-\U0001F6FF"  # transport & map symbols
+        u"\U0001F700-\U0001F77F"  # alchemical symbols
+        u"\U0001F780-\U0001F7FF"  # Geometric Shapes
+        u"\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
+        u"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+        u"\U0001FA00-\U0001FA6F"  # Chess Symbols
+        u"\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+        u"\U00002600-\U000026FF"  # Miscellaneous Symbols
+        u"\U00002700-\U000027BF"  # Dingbats
+        u"\U0000FE00-\U0000FE0F"  # Variation Selectors
         u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        u"\U00002702-\U000027B0"
-        u"\U000024C2-\U0001F251"
+        u"\U00002300-\U000023FF"  # Miscellaneous Technical
+        u"\U000024C2-\U000024FF"  # Enclosed alphanumerics
+        u"\U00002B50-\U00002B55"  # Star symbols
+        u"\U00002600-\U000026FF"  # Miscellaneous Symbols
+        u"\U00002702-\U000027B0"  # Dingbat symbols
+        u"\U000026A0-\U000026AB"  # Warning sign and other symbols
+        u"\U000026A1"             # High voltage
+        u"\U0000203C"             # Double exclamation
+        u"\U00002049"             # Exclamation question mark
+        u"\U000020E3"             # Combining enclosing keycap
+        u"\U00002122"             # Trade mark
+        u"\U00002139"             # Information
+        u"\U00002194-\U00002199"  # Arrows
         "]+", flags=re.UNICODE)
-    return bool(emoji_pattern.match(char))
+
+    # First check if the character is an emoji
+    if emoji_pattern.match(char):
+        return True
+
+    # Also check for combined characters (emoji + variation selector)
+    if len(char) > 1:
+        # Check if any part of the character is a variation selector (U+FE0F)
+        for c in char:
+            if ord(c) == 0xFE0F:
+                return True
+
+    return False
 
 def render_mixed_text(text, size, color, bg_color=None):
     """Render text with mixed emoji and regular characters"""
@@ -160,9 +192,23 @@ def render_mixed_text(text, size, color, bg_color=None):
     # Get reference height for the text
     ref_height = text_font.get_height()
 
+    # Process text to handle emoji sequences properly
+    processed_chars = []
+    i = 0
+    while i < len(text):
+        current_char = text[i]
+
+        # Check if this character plus the next one might form an emoji sequence
+        if i + 1 < len(text) and ord(text[i+1]) == 0xFE0F:  # FE0F is variation selector
+            processed_chars.append(text[i:i+2])
+            i += 2
+        else:
+            processed_chars.append(current_char)
+            i += 1
+
     # Split text into characters and measure each
     char_surfaces = []
-    for char in text:
+    for char in processed_chars:
         if is_emoji(char):
             surf = emoji_font.render(char, True, color)
             # Scale emoji to fit the text height
@@ -183,7 +229,7 @@ def render_mixed_text(text, size, color, bg_color=None):
     # Render each character
     x_pos = 0
     for i, surf in enumerate(char_surfaces):
-        char = text[i]
+        char = processed_chars[i]
         if is_emoji(char):
             # Center emoji vertically
             y_pos = (ref_height - surf.get_height()) // 2
@@ -384,10 +430,24 @@ def render_text_with_blink(text: str, font_size: int, color: str, blink_mode: in
     # For modes 1 and 2 (partial blinking)
     final_surface = pygame.Surface((total_width, total_height), pygame.SRCALPHA)
 
+    # Process text to handle emoji sequences properly
+    processed_chars = []
+    i = 0
+    while i < len(text):
+        current_char = text[i]
+
+        # Check if this character plus the next one might form an emoji sequence
+        if i + 1 < len(text) and ord(text[i+1]) == 0xFE0F:  # FE0F is variation selector
+            processed_chars.append(text[i:i+2])
+            i += 2
+        else:
+            processed_chars.append(current_char)
+            i += 1
+
     # For partial blinking, render the full text again to ensure proper scaling
     if blink_mode in (1, 2):
         x_pos = 0
-        for i, char in enumerate(text):
+        for char in processed_chars:
             is_emoji_char = is_emoji(char)
             should_blink = (
                 (blink_mode == 1 and not is_emoji_char) or
