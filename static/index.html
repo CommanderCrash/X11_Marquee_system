@@ -1,327 +1,542 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marquee Display Server</title>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Marquee Display Server</title>
+        <style>
+            /* Theme variables */
+            :root {
+                /* Default Matrix theme */
+                --bg-primary: black;
+                --glass-bg: rgba(17, 25, 40, 0.75);
+                --text-primary: #fff;
+                --accent-color: #d5ff76;
+                --border-color: rgba(255, 255, 255, 0.125);
+                --shadow-color: rgba(0, 255, 0, 0.3);
+                --input-bg: rgba(0, 0, 0, 0.3);
+                --button-bg: rgba(0, 255, 0, 0.2);
+                --button-hover: rgba(0, 255, 0, 0.4);
+                --log-bg: rgba(0, 0, 0, 0.2);
+                --timestamp-color: #aaffaa;
+            }
+            /* Theme switcher styles */
+            .theme-switcher {
+                position: fixed;
+                top: 0px;
+                right: 20px;
+                z-index: 1000;
+            }
+            .theme-select {
+                padding: 8px;
+                border-radius: 4px;
+                background: var(--glass-bg);
+                color: var(--text-primary);
+                border: 1px solid var(--border-color);
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            .theme-select:hover {
+                box-shadow: 0 0 10px var(--shadow-color);
+            }
+            /* Base styles */
+            body {
+                margin: 0;
+                padding: 0;
+                background: var(--bg-primary);
+                font-family: "Arial", sans-serif;
+                color: var(--text-primary);
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                transition: all 0.3s ease;
+            }
+            .container-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                padding: 20px;
+            }
+            .glass-container {
+                backdrop-filter: blur(10px) saturate(180%);
+                background-color: var(--glass-bg);
+                border-radius: 12px;
+                border: 1px solid var(--border-color);
+                padding: 20px;
+                margin: 20px;
+                box-shadow: 0 0 20px var(--shadow-color);
+                transition: all 0.3s ease;
+            }
+            /* Form styles */
+            .form-group {
+                margin-bottom: 15px;
+            }
+            label {
+                display: block;
+                margin-bottom: 5px;
+                color: var(--accent-color);
+                text-shadow: 0 0 5px var(--accent-color);
+            }
+            input,
+            select {
+                width: 100%;
+                padding: 8px;
+                border-radius: 4px;
+                border: 1px solid var(--border-color);
+                background: var(--input-bg);
+                color: var(--text-primary);
+            }
+            button {
+                padding: 10px 20px;
+                border-radius: 4px;
+                border: 1px solid var(--border-color);
+                background: var(--button-bg);
+                color: var(--text-primary);
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            button:hover {
+                background: var(--button-hover);
+                text-shadow: 0 0 5px #fff;
+                box-shadow: 0 0 10px var(--shadow-color);
+            }
+            /* Message log styles */
+            .message-log {
+                height: 300px;
+                overflow-y: auto;
+                padding: 10px;
+                background: var(--log-bg);
+                border-radius: 4px;
+            }
+            .log-entry {
+                padding: 8px;
+                border-bottom: 1px solid var(--border-color);
+                font-family: monospace;
+            }
+            .log-entry .timestamp {
+                color: var(--timestamp-color);
+                margin-right: 10px;
+            }
+            .log-entry .priority {
+                color: #ff9800;
+                margin-left: 10px;
+            }
+            /* Context menu */
+            .context-menu {
+                position: fixed;
+                background: var(--glass-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 4px;
+                padding: 5px 0;
+                display: none;
+            }
+            .context-menu-item {
+                padding: 8px 20px;
+                cursor: pointer;
+            }
+            .context-menu-item:hover {
+                background: var(--button-hover);
+            }
+            /* Modal styles */
+            .modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                justify-content: center;
+                align-items: center;
+            }
+            .modal-content {
+                background: var(--glass-bg);
+                padding: 20px;
+                border-radius: 8px;
+                border: 1px solid var(--border-color);
+                width: 300px;
+            }
+            /* Matrix background */
+            #matrix-canvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -1;
+            }
 
+            /* Cherry blossom background */
+            #cherry-blossom-canvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -1;
+                display: none;
+            }
 
-<style>
-    /* Theme variables */
-    :root {
-        /* Default Matrix theme */
-        --bg-primary: black;
-        --glass-bg: rgba(17, 25, 40, 0.75);
-        --text-primary: #fff;
-        --accent-color: #d5ff76;
-        --border-color: rgba(255, 255, 255, 0.125);
-        --shadow-color: rgba(0, 255, 0, 0.3);
-        --input-bg: rgba(0, 0, 0, 0.3);
-        --button-bg: rgba(0, 255, 0, 0.2);
-        --button-hover: rgba(0, 255, 0, 0.4);
-        --log-bg: rgba(0, 0, 0, 0.2);
-    }
+            /* Office theme specific styles */
+            [data-theme="office"] .glass-container {
+                border-radius: 4px;
+                padding: 24px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+            }
+            [data-theme="office"] button {
+                border-radius: 2px;
+                font-weight: 500;
+                text-transform: none;
+                height: 32px;
+                padding: 0 20px;
+            }
+            [data-theme="office"] input,
+            [data-theme="office"] select {
+                height: 30px;
+                border: 1px solid #e6e6e6;
+                border-radius: 2px;
+            }
+            [data-theme="office"] .message-log {
+                border: 1px solid #e6e6e6;
+                border-radius: 2px;
+            }
+            [data-theme="office"] .log-entry {
+                border-bottom: 1px solid #f3f2f1;
+                padding: 12px;
+            }
+            [data-theme="office"] .timestamp {
+                color: #00b7eb;
+            }
+            [data-theme="office"] label {
+                color: #323130;
+                font-weight: 500;
+                text-shadow: none;
+            }
 
-    /* Theme switcher styles */
-    .theme-switcher {
-        position: fixed;
-        top: 0px;
-        right: 20px;
-        z-index: 1000;
-    }
+            /* Cherry Blossom theme specific styles */
+            [data-theme="cherry-blossom"] {
+                --bg-primary: #000000;
+                --glass-bg: rgba(255, 217, 228, 0.7);
+                --text-primary: #442c33;
+                --accent-color: #ff758f;
+                --border-color: rgba(255, 183, 197, 0.4);
+                --shadow-color: rgba(255, 166, 193, 0.3);
+                --input-bg: rgba(255, 246, 248, 0.7);
+                --button-bg: rgba(255, 182, 193, 0.6);
+                --button-hover: rgba(255, 105, 180, 0.7);
+                --log-bg: rgba(255, 240, 245, 0.6);
+                --timestamp-color: #e06377;
+            }
 
-    .theme-select {
-        padding: 8px;
-        border-radius: 4px;
-        background: var(--glass-bg);
-        color: var(--text-primary);
-        border: 1px solid var(--border-color);
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
+            [data-theme="cherry-blossom"] .glass-container {
+                border-radius: 15px;
+                border: 1px solid rgba(255, 182, 193, 0.4);
+                background-color: rgba(255, 217, 228, 0.7);
+                box-shadow: 0 5px 15px rgba(255, 166, 193, 0.3);
+            }
 
-    .theme-select:hover {
-        box-shadow: 0 0 10px var(--shadow-color);
-    }
+            [data-theme="cherry-blossom"] button {
+                border-radius: 20px;
+                background-color: rgba(255, 182, 193, 0.6);
+                color: #442c33;
+                font-weight: 500;
+            }
 
-    /* Base styles */
-    body {
-        margin: 0;
-        padding: 0;
-        background: var(--bg-primary);
-        font-family: 'Arial', sans-serif;
-        color: var(--text-primary);
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        transition: all 0.3s ease;
-    }
+            [data-theme="cherry-blossom"] button:hover {
+                background-color: rgba(255, 105, 180, 0.7);
+                box-shadow: 0 0 10px rgba(255, 166, 193, 0.5);
+            }
 
-    .container-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 20px;
-        padding: 20px;
-    }
+            [data-theme="cherry-blossom"] input,
+            [data-theme="cherry-blossom"] select {
+                border: 1px solid rgba(255, 182, 193, 0.6);
+                border-radius: 10px;
+                background-color: rgba(255, 246, 248, 0.7);
+                color: #442c33;
+            }
 
-    .glass-container {
-        backdrop-filter: blur(10px) saturate(180%);
-        background-color: var(--glass-bg);
-        border-radius: 12px;
-        border: 1px solid var(--border-color);
-        padding: 20px;
-        margin: 20px;
-        box-shadow: 0 0 20px var(--shadow-color);
-        transition: all 0.3s ease;
-    }
+            [data-theme="cherry-blossom"] .message-log {
+                border: 1px solid rgba(255, 182, 193, 0.6);
+                border-radius: 10px;
+                background-color: rgba(255, 240, 245, 0.6);
+            }
 
-    /* Form styles */
-    .form-group {
-        margin-bottom: 15px;
-    }
+            [data-theme="cherry-blossom"] .log-entry {
+                border-bottom: 1px solid rgba(255, 182, 193, 0.4);
+                color: #442c33;
+            }
 
-    label {
-        display: block;
-        margin-bottom: 5px;
-        color: var(--accent-color);
-        text-shadow: 0 0 5px var(--accent-color);
-    }
+            [data-theme="cherry-blossom"] h2 {
+                color: #e06377;
+                text-shadow: 0 1px 2px rgba(255, 166, 193, 0.2);
+            }
 
-    input, select {
-        width: 100%;
-        padding: 8px;
-        border-radius: 4px;
-        border: 1px solid var(--border-color);
-        background: var(--input-bg);
-        color: var(--text-primary);
-    }
+            [data-theme="cherry-blossom"] label {
+                color: #c83349;
+                text-shadow: none;
+            }
 
-    button {
-        padding: 10px 20px;
-        border-radius: 4px;
-        border: 1px solid var(--border-color);
-        background: var(--button-bg);
-        color: var(--text-primary);
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
+            /* Cyberpunk theme specific styles */
+            [data-theme="cyberpunk"] {
+                --bg-primary: var(--dark-bg);
+                --glass-bg: rgba(10, 10, 32, 0.9);
+                --text-primary: #ffffff;
+                --accent-color: var(--neon-pink);
+                --border-color: var(--neon-blue);
+                --shadow-color: rgba(0, 255, 249, 0.3);
+                --input-bg: var(--darker-bg);
+                --button-bg: transparent;
+                --button-hover: var(--neon-blue);
+                --log-bg: rgba(5, 5, 16, 0.8);
+                --timestamp-color: var(--cyber-green);
 
-    button:hover {
-        background: var(--button-hover);
-        text-shadow: 0 0 5px #fff;
-        box-shadow: 0 0 10px var(--shadow-color);
-    }
+                /* Define the cyberpunk color variables */
+                --neon-pink: #ff2a6d;
+                --neon-blue: #00fff9;
+                --neon-purple: #8a2be2;
+                --dark-bg: #0a0a20;
+                --darker-bg: #050510;
+                --cyber-green: #39ff14;
+            }
 
-    /* Message log styles */
-    .message-log {
-        height: 300px;
-        overflow-y: auto;
-        padding: 10px;
-        background: var(--log-bg);
-        border-radius: 4px;
-    }
+            [data-theme="cyberpunk"] body {
+                background: linear-gradient(
+                    45deg,
+                    var(--darker-bg),
+                    var(--dark-bg)
+                );
+            }
 
-    .log-entry {
-        padding: 8px;
-        border-bottom: 1px solid var(--border-color);
-        font-family: monospace;
-    }
+            [data-theme="cyberpunk"] .glass-container {
+                border: 1px solid var(--neon-blue);
+                border-radius: 10px;
+                box-shadow: 0 0 20px rgba(0, 255, 249, 0.2);
+                background: rgba(10, 10, 32, 0.9);
+                animation: glow 2s infinite alternate;
+            }
 
-.log-entry .timestamp {
-    color: var(--timestamp-color);
-    margin-right: 10px;
-}
+            @keyframes glow {
+                0% {
+                    box-shadow:
+                        0 0 5px var(--neon-blue),
+                        0 0 10px var(--neon-blue);
+                }
+                100% {
+                    box-shadow:
+                        0 0 10px var(--neon-blue),
+                        0 0 20px var(--neon-blue);
+                }
+            }
 
-    .log-entry .priority {
-        color: #ff9800;
-        margin-left: 10px;
-    }
+            @keyframes flicker {
+                0%,
+                19.999%,
+                22%,
+                62.999%,
+                64%,
+                64.999%,
+                70%,
+                100% {
+                    opacity: 1;
+                }
+                20%,
+                21.999%,
+                63%,
+                63.999%,
+                65%,
+                69.999% {
+                    opacity: 0.4;
+                }
+            }
 
-    /* Context menu */
-    .context-menu {
-        position: fixed;
-        background: var(--glass-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 4px;
-        padding: 5px 0;
-        display: none;
-    }
+            [data-theme="cyberpunk"] h2 {
+                color: var(--neon-pink);
+                text-align: center;
+                text-transform: uppercase;
+                letter-spacing: 3px;
+                animation: flicker 3s infinite;
+                text-shadow: 0 0 10px var(--neon-pink);
+            }
 
-    .context-menu-item {
-        padding: 8px 20px;
-        cursor: pointer;
-    }
+            [data-theme="cyberpunk"] button {
+                background: transparent;
+                border: 1px solid var(--neon-blue);
+                color: var(--neon-blue);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                border-radius: 5px;
+                font-weight: bold;
+                animation: glow 2s infinite alternate;
+                transition: all 0.3s ease;
+            }
 
-    .context-menu-item:hover {
-        background: var(--button-hover);
-    }
+            [data-theme="cyberpunk"] button:hover {
+                background: var(--neon-blue);
+                color: var(--darker-bg);
+                box-shadow: 0 0 15px var(--neon-blue);
+            }
 
-    /* Modal styles */
-    .modal {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        justify-content: center;
-        align-items: center;
-    }
+            [data-theme="cyberpunk"] input,
+            [data-theme="cyberpunk"] select {
+                background: var(--darker-bg);
+                border: 1px solid var(--neon-blue);
+                color: #fff;
+                border-radius: 5px;
+            }
 
-    .modal-content {
-        background: var(--glass-bg);
-        padding: 20px;
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-        width: 300px;
-    }
+            [data-theme="cyberpunk"] .message-log {
+                border: 1px solid var(--neon-blue);
+                border-radius: 5px;
+                background: rgba(5, 5, 16, 0.8);
+            }
 
-    /* Matrix background */
-    #matrix-canvas {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: -1;
-    }
+            [data-theme="cyberpunk"] .log-entry {
+                border-bottom: 1px solid rgba(0, 255, 249, 0.2);
+            }
 
-    /* Office theme specific styles */
-    [data-theme='office'] .glass-container {
-        border-radius: 4px;
-        padding: 24px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-    }
+            [data-theme="cyberpunk"] label {
+                color: var(--neon-blue);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                font-size: 0.9em;
+                text-shadow: 0 0 5px var(--neon-blue);
+            }
 
-    [data-theme='office'] button {
-        border-radius: 2px;
-        font-weight: 500;
-        text-transform: none;
-        height: 32px;
-        padding: 0 20px;
-    }
-
-    [data-theme='office'] input,
-    [data-theme='office'] select {
-        height: 30px;
-        border: 1px solid #e6e6e6;
-        border-radius: 2px;
-    }
-
-    [data-theme='office'] .message-log {
-        border: 1px solid #e6e6e6;
-        border-radius: 2px;
-    }
-
-    [data-theme='office'] .log-entry {
-        border-bottom: 1px solid #f3f2f1;
-        padding: 12px;
-    }
-
-    [data-theme='office'] .timestamp {
-        color: #00b7eb;
-    }
-
-    [data-theme='office'] label {
-        color: #323130;
-        font-weight: 500;
-        text-shadow: none;
-    }
-</style>
-</head>
-<body>
-
-<div class="theme-switcher">
-    <select id="theme-select" class="theme-select">
-        <option value="matrix">Matrix Theme</option>
-        <option value="office">Office Theme</option>
-    </select>
-</div>
-
-    <canvas id="matrix-canvas"></canvas>
-    
-    <div class="container-grid">
-        <!-- Message Sender -->
-        <div class="glass-container">
-            <h2>Send Message</h2>
-            <form id="message-form">
-                <div class="form-group">
-                    <label for="message-text">Message</label>
-                    <input type="text" id="message-text" required>
-                </div>
-                <div class="form-group">
-                    <label for="message-priority">Priority</label>
-                    <input type="number" id="message-priority" value="1" min="1" max="10">
-                </div>
-                <div class="form-group">
-                    <label for="message-color">Text Color</label>
-                    <input type="color" id="message-color" value="#ffffff">
-                </div>
-                <div class="form-group">
-                    <label for="message-bg-color">Background Color</label>
-                    <input type="color" id="message-bg-color" value="#000000">
-                </div>
-                <div class="form-group">
-                    <label for="blink-mode">Blink Mode</label>
-                    <select id="blink-mode">
-                        <option value="0">No Blink</option>
-                        <option value="1">Text Only</option>
-                        <option value="2">Emoji Only</option>
-                        <option value="3">Full Blink</option>
-                    </select>
-                </div>
-<div class="form-group">
-    <label for="scroll-speed">Scroll Speed</label>
-    <input type="range" 
-           id="scroll-speed" 
-           min="0.001" 
-           max="0.1" 
-           step="0.001" 
-           value="0.05">
-    <span id="speed-value">0.05</span>
-</div>
-                <button type="submit">Send Message</button>
-            </form>
+            /* For the cyberpunk canvas background */
+            #cyberpunk-canvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -1;
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="theme-switcher">
+            <select id="theme-select" class="theme-select">
+                <option value="matrix">Matrix Theme</option>
+                <option value="office">Office Theme</option>
+                <option value="cherry-blossom">Cherry Blossom Theme</option>
+                <option value="cyberpunk">Cyberpunk Theme</option>
+            </select>
         </div>
+        <canvas id="matrix-canvas"></canvas>
+        <canvas id="cherry-blossom-canvas"></canvas>
+        <canvas
+            id="cyberpunk-canvas"
+            style="
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -1;
+            "
+        ></canvas>
 
-        <!-- Message Log -->
-        <div class="glass-container">
-            <h2>Message Log</h2>
-            <div class="message-log" id="message-log"></div>
-            <button id="clear-log">Clear Log</button>
-        </div>
-    </div>
-
-    <!-- Context Menu -->
-    <div class="context-menu" id="context-menu">
-        <div class="context-menu-item" id="ignore-message">Ignore Message</div>
-    </div>
-
-    <!-- Ignore Modal -->
-    <div class="modal" id="ignore-modal">
-        <div class="modal-content">
-            <h3>Ignore Message</h3>
-            <div class="form-group">
-                <label for="ignore-duration">Duration (minutes)</label>
-                <input type="number" id="ignore-duration" min="1" value="5">
+        <div class="container-grid">
+            <!-- Message Sender -->
+            <div class="glass-container">
+                <h2>Send Message</h2>
+                <form id="message-form">
+                    <div class="form-group">
+                        <label for="message-text">Message</label>
+                        <input type="text" id="message-text" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="message-priority">Priority</label>
+                        <input
+                            type="number"
+                            id="message-priority"
+                            value="1"
+                            min="1"
+                            max="10"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="message-color">Text Color</label>
+                        <input
+                            type="color"
+                            id="message-color"
+                            value="#ffffff"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="message-bg-color">Background Color</label>
+                        <input
+                            type="color"
+                            id="message-bg-color"
+                            value="#000000"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="blink-mode">Blink Mode</label>
+                        <select id="blink-mode">
+                            <option value="0">No Blink</option>
+                            <option value="1">Text Only</option>
+                            <option value="2">Emoji Only</option>
+                            <option value="3">Full Blink</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="scroll-speed">Scroll Speed</label>
+                        <input
+                            type="range"
+                            id="scroll-speed"
+                            min="0.001"
+                            max="0.1"
+                            step="0.001"
+                            value="0.05"
+                        />
+                        <span id="speed-value">0.05</span>
+                    </div>
+                    <button type="submit">Send Message</button>
+                </form>
             </div>
-            <button id="confirm-ignore">Confirm</button>
-            <button id="cancel-ignore">Cancel</button>
+            <!-- Message Log -->
+            <div class="glass-container">
+                <h2>Message Log</h2>
+                <div class="message-log" id="message-log"></div>
+                <button id="clear-log">Clear Log</button>
+            </div>
         </div>
-    </div>
-
-    <!-- Audio Elements -->
-    <audio id="hoverSound" preload="auto">
-        <source src="/sounds/menu-hover.wav" type="audio/wav">
-    </audio>
-    <audio id="clickSound" preload="auto">
-        <source src="/sounds/Menu-sel1.wav" type="audio/wav">
-    </audio>
-    <audio id="dropdownSound" preload="auto">
-        <source src="/sounds/Menu-back.wav" type="audio/wav">
-    </audio>
-
-    <script src="/static/js/main.js"></script>
-</body>
+        <!-- Context Menu -->
+        <div class="context-menu" id="context-menu">
+            <div class="context-menu-item" id="ignore-message">
+                Ignore Message
+            </div>
+        </div>
+        <!-- Ignore Modal -->
+        <div class="modal" id="ignore-modal">
+            <div class="modal-content">
+                <h3>Ignore Message</h3>
+                <div class="form-group">
+                    <label for="ignore-duration">Duration (minutes)</label>
+                    <input
+                        type="number"
+                        id="ignore-duration"
+                        min="1"
+                        value="5"
+                    />
+                </div>
+                <button id="confirm-ignore">Confirm</button>
+                <button id="cancel-ignore">Cancel</button>
+            </div>
+        </div>
+        <!-- Audio Elements -->
+        <audio id="hoverSound" preload="auto">
+            <source src="/sounds/menu-hover.wav" type="audio/wav" />
+        </audio>
+        <audio id="clickSound" preload="auto">
+            <source src="/sounds/Menu-sel1.wav" type="audio/wav" />
+        </audio>
+        <audio id="dropdownSound" preload="auto">
+            <source src="/sounds/Menu-back.wav" type="audio/wav" />
+        </audio>
+        <script src="/static/js/main.js"></script>
+    </body>
 </html>
