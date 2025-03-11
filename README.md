@@ -88,7 +88,7 @@ Available command line options:
 
 1. Via Unix Socket:
 ```bash
-echo "1|0|Hello World!|#ffffff|#000000|1.0||" > /mnt/ram/message_socket
+echo "1|0|Hello World!|#ffffff|#000000|1.0||" nc -U /mnt/ram/message_socket
 ```
 
 2. Via TCP (if enabled):
