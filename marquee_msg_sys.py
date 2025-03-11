@@ -77,13 +77,13 @@ def get_emoji_font(size):
     """Get font for emojis"""
     # Force a very small fixed size for emojis
     emoji_size = 10  # Try a fixed small size regardless of input size
-    
+
     emoji_paths = [
         "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
         "/usr/share/fonts/google-noto-emoji/NotoColorEmoji.ttf",
         None
     ]
-    
+
     for font_path in emoji_paths:
         try:
             if font_path is None:
@@ -119,7 +119,7 @@ def get_font_with_emoji_support(size):
         except Exception as e:
             print(f"Failed to load font {font_path}: {e}")
             continue
-    
+
     # Fall back to emoji fonts
     for font_path in EMOJI_FONT_PATHS:
         try:
@@ -132,7 +132,7 @@ def get_font_with_emoji_support(size):
         except Exception as e:
             print(f"Failed to load emoji font {font_path}: {e}")
             continue
-            
+
     print("Using default pygame font as last resort")
     return pygame.font.Font(None, size)
 
@@ -153,40 +153,47 @@ def render_mixed_text(text, size, color, bg_color=None):
     """Render text with mixed emoji and regular characters"""
     text_font = get_text_font(size)
     emoji_font = get_emoji_font(size)
-    
+
     # First calculate total width
     total_width = 0
-    heights = []
-    
+
+    # Get reference height for the text
+    ref_height = text_font.get_height()
+
     # Split text into characters and measure each
+    char_surfaces = []
     for char in text:
         if is_emoji(char):
             surf = emoji_font.render(char, True, color)
-            # Adjust emoji vertical position
-            heights.append(int(text_font.get_height() * 0.1))  # Slightly lower than text height
+            # Scale emoji to fit the text height
+            scale_factor = min(1.0, (ref_height * 0.9) / surf.get_height())
+            scaled_width = int(surf.get_width() * scale_factor)
+            scaled_height = int(surf.get_height() * scale_factor)
+            if scaled_width > 0 and scaled_height > 0:
+                surf = pygame.transform.scale(surf, (scaled_width, scaled_height))
         else:
             surf = text_font.render(char, True, color)
-            heights.append(surf.get_height())
+
+        char_surfaces.append(surf)
         total_width += surf.get_width()
-    
-    # Create surface using text font height as reference
-    max_height = text_font.get_height()
-    surface = pygame.Surface((total_width, max_height), pygame.SRCALPHA)
-    
+
+    # Create surface with text height as reference
+    surface = pygame.Surface((total_width, ref_height), pygame.SRCALPHA)
+
     # Render each character
     x_pos = 0
-    for char in text:
+    for i, surf in enumerate(char_surfaces):
+        char = text[i]
         if is_emoji(char):
-            char_surf = emoji_font.render(char, True, color)
             # Center emoji vertically
-            y_pos = (max_height - char_surf.get_height()) // 2
+            y_pos = (ref_height - surf.get_height()) // 2
         else:
-            char_surf = text_font.render(char, True, color)
-            y_pos = 0  # Regular text aligned to top
-            
-        surface.blit(char_surf, (x_pos, y_pos))
-        x_pos += char_surf.get_width()
-    
+            # Regular text aligned to baseline
+            y_pos = (ref_height - surf.get_height()) // 4
+
+        surface.blit(surf, (x_pos, y_pos))
+        x_pos += surf.get_width()
+
     return surface
 
 def add_to_message_history(text, priority=1, color="#ffffff", bg_color="#000000"):
@@ -212,7 +219,7 @@ class Message:
     wav_path: str
     use_espeak: str
     id: str = ""
-    
+
     def __post_init__(self):
         if not self.id:
             self.id = str(uuid.uuid4())
@@ -254,38 +261,38 @@ class NotificationHandler(SimpleHTTPRequestHandler):
     def __init__(self, message_queue, *args, **kwargs):
         self.message_queue = message_queue
         super().__init__(*args, **kwargs)
-    
+
     def translate_path(self, path):
         # Serve files from the static directory
         if path == '/':
             return os.path.join(os.path.dirname(__file__), 'static', 'index.html')
         return os.path.join(os.path.dirname(__file__), 'static', path.lstrip('/'))
-    
+
     def do_POST(self):
         if self.path == '/api/send-message':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode('utf-8'))
-            
+
             # Convert hex colors to names or keep as hex
             color = data.get('color', '#ffffff')
             bg_color = data.get('bgColor', '#000000')
-            
+
             # Create message string in the expected format
             message_str = (f"{data.get('priority', 1)}|"
                          f"{data.get('blinkMode', 0)}|"
                          f"{data.get('text', '')}|"
                          f"{color}|{bg_color}|"
                          f"{data.get('speed', 1.0)}||")
-            
+
             parse_and_queue_message(message_str)
-            
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({'status': 'success'}).encode())
             return
-            
+
         return super().do_POST()
 
 # Global variables
@@ -360,43 +367,61 @@ def show_marquee(message: Message):
 def render_text_with_blink(text: str, font_size: int, color: str, blink_mode: int, has_emoji: bool) -> pygame.Surface:
     """Render text with blinking support"""
     global blink_state
-    
+
     # First render the complete text to get total dimensions
     full_text_surface = render_mixed_text(text, font_size, pygame.Color(color))
     total_width = full_text_surface.get_width()
     total_height = full_text_surface.get_height()
-    
+
     # If not blinking or full text blink, return the appropriate surface
     if blink_mode == 0 or (blink_mode == 3 and blink_state):
         return full_text_surface
-    
+
     if blink_mode == 3 and not blink_state:
         # Return empty surface of same size
         return pygame.Surface((total_width, total_height), pygame.SRCALPHA)
-    
+
     # For modes 1 and 2 (partial blinking)
     final_surface = pygame.Surface((total_width, total_height), pygame.SRCALPHA)
-    x_pos = 0
-    
-    for char in text:
-        is_emoji_char = is_emoji(char)
-        should_blink = (
-            (blink_mode == 1 and not is_emoji_char) or
-            (blink_mode == 2 and is_emoji_char)
-        )
-        
-        # Render each character
-        char_surface = render_mixed_text(char, font_size, pygame.Color(color))
-        char_width = char_surface.get_width()
-        
-        if not should_blink or blink_state:
-            # If character should be visible, blit it
-            final_surface.blit(char_surface, (x_pos, 0))
-        # If character should be invisible, skip blitting (space is already transparent)
-        
-        x_pos += char_width  # Always advance by character width
-    
-    return final_surface
+
+    # For partial blinking, render the full text again to ensure proper scaling
+    if blink_mode in (1, 2):
+        x_pos = 0
+        for i, char in enumerate(text):
+            is_emoji_char = is_emoji(char)
+            should_blink = (
+                (blink_mode == 1 and not is_emoji_char) or
+                (blink_mode == 2 and is_emoji_char)
+            )
+
+            # Render each character
+            if is_emoji_char:
+                emoji_font = get_emoji_font(font_size)
+                char_surface = emoji_font.render(char, True, pygame.Color(color))
+
+                # Scale emoji to fit within the height
+                ref_height = get_text_font(font_size).get_height()
+                scale_factor = min(1.0, (ref_height * 0.9) / char_surface.get_height())
+                scaled_width = int(char_surface.get_width() * scale_factor)
+                scaled_height = int(char_surface.get_height() * scale_factor)
+
+                if scaled_width > 0 and scaled_height > 0:
+                    char_surface = pygame.transform.scale(char_surface, (scaled_width, scaled_height))
+
+                # Center emoji vertically
+                y_pos = (total_height - char_surface.get_height()) // 2
+            else:
+                char_surface = get_text_font(font_size).render(char, True, pygame.Color(color))
+                y_pos = (total_height - char_surface.get_height()) // 4
+
+            if not should_blink or blink_state:
+                final_surface.blit(char_surface, (x_pos, y_pos))
+
+            x_pos += char_surface.get_width()
+
+        return final_surface
+
+    return full_text_surface
 
 def update_marquee():
     global current_message, message_visible, screen, blink_state
@@ -405,24 +430,24 @@ def update_marquee():
             font_size = 70  # Define font size here if it works
             font = get_font_with_emoji_support(font_size)  # Get font for initial measurement only
             has_emoji = current_message.has_emoji()
-            
+
             # Get initial text dimensions
             temp_text = font.render(current_message.text, True, pygame.Color(current_message.color))
             text_rect = temp_text.get_rect()
             screen_height = text_rect.height + 5
-            
+
             # Set up the window size
             pygame.display.set_mode((screen.get_width(), screen_height), pygame.NOFRAME | pygame.SHOWN)
-            
+
             # Parse background color
             try:
                 bg_color = pygame.Color(current_message.bg_color)
             except (ValueError, TypeError):
                 bg_color = pygame.Color(0, 0, 0)
-            
+
             # For scrolling
             x = screen.get_width()
-            
+
             # Pre-render the text to get its full width
             full_text = render_text_with_blink(
                 current_message.text,
@@ -432,21 +457,21 @@ def update_marquee():
                 has_emoji
             )
             text_width = full_text.get_width()
-            
+
             # Slow down the blinking
             blink_counter = 0
-            
+
             # Continue until the entire text has scrolled off the left side of the screen
             while x > -(text_width):  # Changed condition to use actual text width
                 if not window_visible:
                     break
-                
+
                 # Update blink state every 30 frames (slower blink)
                 blink_counter += 1
                 if blink_counter >= 30:
                     blink_state = not blink_state
                     blink_counter = 0
-                
+
                 # Render text with current blink state, passing font_size instead of font object
                 rendered_text = render_text_with_blink(
                     current_message.text,
@@ -455,11 +480,11 @@ def update_marquee():
                     current_message.blink_mode,
                     has_emoji
                 )
-                
+
                 screen.fill(bg_color)
                 screen.blit(rendered_text, (x, 10))
                 pygame.display.flip()
-                
+
                 x -= 5
                 pygame.time.delay(int(current_message.speed * 1000))
 
@@ -478,13 +503,13 @@ def parse_and_queue_message(data):
         if len(parts) < 8:
             print(f"Invalid message format. Expected 8 parts, got {len(parts)}")
             return
-            
+
         priority, blink_mode, text, color, bg_color, speed, wav_path, use_espeak = parts[:8]
-        
+
         # Fix empty background color
         if not bg_color.strip():
             bg_color = "black"
-            
+
         # Add to message history BEFORE creating Message object
         history_entry = {
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -495,7 +520,7 @@ def parse_and_queue_message(data):
         }
         print(f"Adding to history: {history_entry}")  # Debug print
         message_history.append(history_entry)
-        
+
         msg = Message(
             text=text,
             priority=int(priority),
@@ -506,11 +531,11 @@ def parse_and_queue_message(data):
             wav_path=wav_path,
             use_espeak=use_espeak
         )
-        
+
         print(f"Created message object: {msg}")
         message_queue.add_message(msg)
         print("Message added to queue")
-        
+
     except Exception as e:
         print(f"Failed to parse message: {e}")
         traceback.print_exc()  # Add this for better error tracking
@@ -521,17 +546,17 @@ def socket_listener():
         if tcp_sock:
             read_sockets.append(tcp_sock)
         read_sockets, _, _ = select.select(read_sockets, [], [], 1.0)
-        
+
         for sock in read_sockets:
             try:
                 print(f"Accepting connection on socket {sock}")
                 connection, client_address = sock.accept()
                 print(f"Connection accepted from {client_address}")
                 connection.settimeout(5.0)
-                
+
                 data = connection.recv(1024).decode().strip()
                 print(f"Raw data received: {data}")
-                
+
                 if data:
                     # This will now log the message through parse_and_queue_message
                     parse_and_queue_message(data)
@@ -573,20 +598,20 @@ def serve_sound(filename):
 def send_message():
     try:
         data = request.get_json()
-        
+
         # Convert hex colors to names or keep as hex
         color = data.get('color', '#ffffff')
         bg_color = data.get('bgColor', '#000000')
-        
+
         # Create message string in the expected format
         message_str = (f"{data.get('priority', 1)}|"
                      f"{data.get('blinkMode', 0)}|"
                      f"{data.get('text', '')}|"
                      f"{color}|{bg_color}|"
                      f"{data.get('speed', 1.0)}||")
-        
+
         parse_and_queue_message(message_str)
-        
+
         return jsonify({'status': 'success'})
     except Exception as e:
         print(f"Error in send_message: {e}")  # Add error logging
@@ -613,7 +638,7 @@ def start_webserver(port):
 
 if __name__ == "__main__":
     args = parse_arguments()
-    
+
     print("\nServer Configuration:")
     print(f"Unix Socket: Enabled at {sock_path}")
     print(f"TCP Socket: {'Enabled' if args.tcp else 'Disabled'} (Port {tcp_port})")
