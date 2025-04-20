@@ -16,6 +16,7 @@ import argparse
 import re
 import json
 import os.path
+import traceback
 from flask import Flask, request, send_from_directory, jsonify
 import threading
 from functools import partial
@@ -31,6 +32,7 @@ app = Flask(__name__, static_folder='static')
 
 # Global message log
 message_history = []
+ignored_messages = {}  # Dictionary to track ignored messages {message_content: expiry_time}
 
 
 def parse_arguments():
@@ -245,6 +247,7 @@ def render_mixed_text(text, size, color, bg_color=None):
 def add_to_message_history(text, priority=1, color="#ffffff", bg_color="#000000"):
     """Centralized function to add messages to history"""
     message_entry = {
+        'id': str(uuid.uuid4()),
         'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
         'message': text,
         'priority': priority,
@@ -349,11 +352,21 @@ window_visible = False
 screen = None
 blink_state = True
 
-def start_webserver(port, message_queue):
-    handler = partial(NotificationHandler, message_queue)
-    server = HTTPServer(('', port), handler)
-    print(f"Web UI started on port {port}")
-    server.serve_forever()
+def start_webserver(port, message_queue=None):
+    # Start cleanup thread for ignored messages
+    def cleanup_ignored_messages():
+        while True:
+            current_time = datetime.now().timestamp()
+            for key in list(ignored_messages.keys()):
+                if ignored_messages[key] < current_time:
+                    print(f"Removing expired ignore for message: {key}")
+                    del ignored_messages[key]
+            time.sleep(60)  # Check every minute
+
+    cleanup_thread = threading.Thread(target=cleanup_ignored_messages, daemon=True)
+    cleanup_thread.start()
+
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 def get_screen_size():
     pygame.display.init()
@@ -570,8 +583,24 @@ def parse_and_queue_message(data):
         if not bg_color.strip():
             bg_color = "black"
 
+        # Check if message is ignored
+        message_key = text.strip().lower()
+        current_time = datetime.now().timestamp()
+
+        # Clean up expired ignored messages
+        for key in list(ignored_messages.keys()):
+            if ignored_messages[key] < current_time:
+                del ignored_messages[key]
+
+        # Check if this message is currently ignored
+        if message_key in ignored_messages:
+            print(f"Message '{text}' is currently ignored. Expires at {datetime.fromtimestamp(ignored_messages[message_key])}")
+            return
+
         # Add to message history BEFORE creating Message object
+        message_id = str(uuid.uuid4())
         history_entry = {
+            'id': message_id,
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'message': text.strip(),
             'priority': int(priority),
@@ -589,7 +618,8 @@ def parse_and_queue_message(data):
             bg_color=bg_color,
             speed=float(speed),
             wav_path=wav_path,
-            use_espeak=use_espeak
+            use_espeak=use_espeak,
+            id=message_id
         )
 
         print(f"Created message object: {msg}")
@@ -687,13 +717,31 @@ def clear_history():
     message_history.clear()
     return jsonify({'status': 'success'})
 
+@app.route('/api/ignore_message', methods=['POST'])
+def ignore_message():
+    global message_history
+    data = request.get_json()
+    message_id = data.get('message_id')
+    duration = data.get('duration', 5)  # Default 5 minutes
+
+    # Find the message in history
+    for msg in message_history:
+        if msg.get('id') == message_id:
+            message_content = msg['message'].strip().lower()
+            expiry_time = datetime.now().timestamp() + (int(duration) * 60)
+            ignored_messages[message_content] = expiry_time
+            print(f"Ignoring message '{message_content}' until {datetime.fromtimestamp(expiry_time)}")
+            break
+
+    # Remove from history
+    message_history = [msg for msg in message_history if msg.get('id') != message_id]
+
+    return jsonify({'status': 'success'})
+
 @app.route('/api/current_message', methods=['GET'])
 def get_current_message():
     # Return empty response since we're not using this endpoint
     return jsonify({'message': None})
-
-def start_webserver(port):
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 
 if __name__ == "__main__":
