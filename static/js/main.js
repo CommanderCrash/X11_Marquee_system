@@ -464,33 +464,35 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   function updateMessageLog() {
     fetch("/api/message-history")
-      .then((response) => response.json())
-      .then((messages) => {
-        const messageLog = document.getElementById("message-log");
-        if (!messageLog) {
-          console.error("Message log element not found!");
-          return;
-        }
+    .then((response) => response.json())
+    .then((messages) => {
+      const messageLog = document.getElementById("message-log");
+      if (!messageLog) {
+        console.error("Message log element not found!");
+        return;
+      }
 
-        messageLog.innerHTML = "";
+      messageLog.innerHTML = "";
 
-        messages.forEach((msg) => {
-          const logEntry = document.createElement("div");
-          logEntry.className = "log-entry";
+      messages.forEach((msg) => {
+        const logEntry = document.createElement("div");
+        logEntry.className = "log-entry";
+        logEntry.dataset.id = msg.id; // Set the message ID
 
-          logEntry.innerHTML = `
-                              <span class="timestamp">${msg.timestamp}</span>
-                              <span class="message-text" style="color: ${msg.color || "var(--text-primary)"}">${msg.message}</span>
-                              ${msg.priority > 1 ? `<span class="priority">[Priority: ${msg.priority}]</span>` : ""}
-                          `;
+        logEntry.innerHTML = `
+        <span class="timestamp">${msg.timestamp}</span>
+        <span class="message-text" style="color: ${msg.color || "var(--text-primary)"}">${msg.message}</span>
+        ${msg.priority > 1 ? `<span class="priority">[Priority: ${msg.priority}]</span>` : ""}
+        `;
 
-          messageLog.appendChild(logEntry);
-        });
-      })
-      .catch((error) => {
-        console.error("Error fetching message history:", error);
+        messageLog.appendChild(logEntry);
       });
+    })
+    .catch((error) => {
+      console.error("Error fetching message history:", error);
+    });
   }
+
   // Update message log every second
   setInterval(updateMessageLog, 1000);
 
